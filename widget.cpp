@@ -6,7 +6,12 @@
 
 Widget::Widget(QWidget *parent)
     : QWidget(parent)
-    , ui(new Ui::Widget)
+    , ui(new Ui::Widget),
+    inputDevice(nullptr),
+    inputContext(nullptr),
+    inputSource(0),
+    outputSource(0),
+    isCapturing(false)
 {
     ui->setupUi(this);
     initializeAudio();
@@ -34,6 +39,7 @@ void Widget::initializeAudio()
 
     alcMakeContextCurrent(inputContext);
     alGenSources(1, &inputSource);
+    alGenSources(1, &outputSource);
 
     connect(ui->captureBtn, &QPushButton::clicked, this, &Widget::on_captureBtn_clicked);
     connect(ui->stopBtn, &QPushButton::clicked, this, &Widget::on_stopBtn_clicked);
