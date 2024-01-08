@@ -2,6 +2,7 @@
 #include "widget.h"
 #include "ui_widget.h"
 #include <QDebug>
+#include <QtConcurrent/QtConcurrent>
 
 Widget::Widget(QWidget *parent)
     : QWidget(parent)
@@ -14,89 +15,73 @@ Widget::Widget(QWidget *parent)
 Widget::~Widget()
 {
     delete ui;
-}
-
-void Widget::stopRecording()
-{
-    alcCaptureStop(audioCaptureDevice);
-    alcCaptureCloseDevice(audioCaptureDevice);
-    ui->status_value->setText("Recording stopped");
+    alDeleteSources(1, &inputSource);
+    alcDestroyContext(inputContext);
+    alcCaptureCloseDevice(inputDevice);
 }
 
 void Widget::initializeAudio()
 {
+    inputDevice = alcCaptureOpenDevice(nullptr, 44100, AL_FORMAT_MONO16, 4096);
 
-    QBuffer* circularBufferDevice = new QBuffer();
-    circularBufferDevice->open(QIODevice::ReadWrite);
-
-    destinationFile.setFileName("/tmp/test.raw");
-    destinationFile.open(QIODevice::WriteOnly | QIODevice::Truncate);
-
-    ALCdevice* device = alcCaptureOpenDevice(nullptr, 44100, AL_FORMAT_MONO16, 4096);
-
-    if (!device)
+    if (!inputDevice)
     {
         qWarning() << "Failed to open audio capture device";
         return;
     }
 
-    audioCaptureDevice = device;
-    circularBuffer = circularBufferDevice;
+    inputContext = alcCreateContext(inputDevice, nullptr);
 
-    ALCcontext* context = alcCreateContext(audioCaptureDevice, nullptr);
-    if (!context) {
-        qWarning() << "Failed to create audio context";
-        alcCloseDevice(audioCaptureDevice);
-        return;
-    }
-
-
-    alcCaptureStart(audioCaptureDevice);
-    alBufferData(circularBufferSource, AL_FORMAT_MONO16, nullptr, 44100 * 10, 44100);
-    alSourceQueueBuffers(circularBufferSource, 1, &circularBufferSource);
-    alSourcePlay(circularBufferSource);
+    alcMakeContextCurrent(inputContext);
+    alGenSources(1, &inputSource);
 
     connect(ui->captureBtn, &QPushButton::clicked, this, &Widget::on_captureBtn_clicked);
+    connect(ui->stopBtn, &QPushButton::clicked, this, &Widget::on_stopBtn_clicked);
 }
 
 void Widget::on_connectBtn_clicked()
 {
-    ui->status_value->setText("Recording...");
+    ui->status_value->setText("connected...");
 }
 
 void Widget::on_captureBtn_clicked()
 {
     ui->status_value->setText("Recording...");
-    alcCaptureStart(audioCaptureDevice);
+    alcCaptureStart(inputDevice);
+    alSourcePlay(inputSource);
 
-    QTimer::singleShot(5000, this, &Widget::stopRecording);
 
-    QTimer::singleShot(100, this, &Widget::updateCircularBuffer);
+    alcCaptureStart(inputDevice);
+    alSourcePlay(inputSource);
 
-    QByteArray circularBufferData = circularBuffer->buffer();
+    isCapturing = true;
 
-    ALuint circularBufferBuffer;
-    alGenBuffers(1, &circularBufferBuffer);
-    alBufferData(circularBufferBuffer, AL_FORMAT_MONO16, circularBufferData.constData(), circularBufferData.size(), 44100);
-
-    alGenSources(1, &circularBufferSource);
-    alSourcei(circularBufferSource, AL_BUFFER, circularBufferBuffer);
-    alSourcei(circularBufferSource, AL_LOOPING, AL_TRUE);
-    alSourcePlay(circularBufferSource);
+    QtConcurrent::run([this]() {
+        while (isCapturing) {
+            processAudio();
+        }
+    });
 
 }
 
-void Widget::updateCircularBuffer()
+void Widget::processAudio()
 {
     ALint samplesAvailable;
-    alcGetIntegerv(audioCaptureDevice, ALC_CAPTURE_SAMPLES, 1, &samplesAvailable);
+    alcGetIntegerv(inputDevice, ALC_CAPTURE_SAMPLES, 1, &samplesAvailable);
 
-    if (samplesAvailable > 0)
-    {
-        ALshort audioBuffer[4096];
-        alcCaptureSamples(audioCaptureDevice, audioBuffer, samplesAvailable);
-        circularBuffer->write(reinterpret_cast<const char*>(audioBuffer), samplesAvailable * sizeof(ALshort));
+    if (samplesAvailable > 0) {
+        ALshort buffer[samplesAvailable];
+        alcCaptureSamples(inputDevice, buffer, samplesAvailable);
+
+        alSourceQueueBuffers(outputSource, 1, &inputSource);
     }
-
-    QTimer::singleShot(100, this, &Widget::updateCircularBuffer);
 }
+
+void Widget::on_stopBtn_clicked()
+{
+    isCapturing = false;
+    ui->status_value->setText("Recording stopped");
+    alcCaptureStop(inputDevice);
+    alSourceStop(inputSource);
+}
+

@@ -26,16 +26,18 @@ public:
 private slots:
     void on_connectBtn_clicked();
     void on_captureBtn_clicked();
-    void stopRecording();
-    void updateCircularBuffer();
+    void on_stopBtn_clicked();
+    void processAudio();
+
 
 private:
     Ui::Widget *ui;
-    ALCdevice *audioCaptureDevice;
-    QFile destinationFile;
-    QBuffer* circularBuffer;
-    ALuint circularBufferSource;
+    ALCcontext* inputContext;
+    ALCdevice* inputDevice;
+    ALuint inputSource;
+    ALuint outputSource;
 
+    bool isCapturing;
 
     void initializeAudio();
 };
