@@ -27,7 +27,11 @@ Widget::~Widget()
 
 void Widget::initializeAudio()
 {
-    inputDevice = alcCaptureOpenDevice(nullptr, 44100, AL_FORMAT_MONO16, 4096);
+    const ALCchar* deviceName;
+
+    deviceName = alcGetString(nullptr, ALC_DEFAULT_DEVICE_SPECIFIER);
+
+    inputDevice = alcOpenDevice(deviceName);
 
     if (!inputDevice)
     {
@@ -35,7 +39,11 @@ void Widget::initializeAudio()
         return;
     }
 
+    qDebug() << "device : " << inputDevice;
+
     inputContext = alcCreateContext(inputDevice, nullptr);
+
+
 
     alcMakeContextCurrent(inputContext);
     alGenSources(1, &inputSource);
@@ -53,6 +61,9 @@ void Widget::on_connectBtn_clicked()
 void Widget::on_captureBtn_clicked()
 {
     ui->status_value->setText("Recording...");
+
+    alcMakeContextCurrent(inputContext);
+
     alcCaptureStart(inputDevice);
     alSourcePlay(inputSource);
 
@@ -62,11 +73,15 @@ void Widget::on_captureBtn_clicked()
 
     isCapturing = true;
 
-    QtConcurrent::run([this]() {
-        while (isCapturing) {
-            processAudio();
-        }
-    });
+    // QtConcurrent::run([this]() {
+    //     while (isCapturing) {
+    //         processAudio();
+    //     }
+    // });
+
+    QTimer* audioTimer = new QTimer(this);
+    connect(audioTimer, &QTimer::timeout, this, &Widget::processAudio);
+    audioTimer->start(20);
 
 }
 
@@ -79,7 +94,18 @@ void Widget::processAudio()
         ALshort buffer[samplesAvailable];
         alcCaptureSamples(inputDevice, buffer, samplesAvailable);
 
+        ALenum alError = alGetError();
+        if (alError != AL_NO_ERROR) {
+            qCritical() << "OpenAL Error: " << alGetString(alError);
+            return;
+        }
+
         alSourceQueueBuffers(outputSource, 1, &inputSource);
+
+        alError = alGetError();
+        if (alError != AL_NO_ERROR) {
+            qCritical() << "OpenAL Error (Queue Buffers): " << alGetString(alError);
+        }
     }
 }
 
@@ -88,6 +114,7 @@ void Widget::on_stopBtn_clicked()
     isCapturing = false;
     ui->status_value->setText("Recording stopped");
     alcCaptureStop(inputDevice);
+    alcMakeContextCurrent(nullptr);
     alSourceStop(inputSource);
 }
 

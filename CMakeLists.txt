@@ -13,7 +13,7 @@ find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
 find_package(Qt6 REQUIRED COMPONENTS Multimedia)
 
-include_directories(/home/elahe/openal-soft/include)
+include_directories(/home/elahe/app/temp1/vcpkg/openal-soft/include)
 
 set(PROJECT_SOURCES
         main.cpp
