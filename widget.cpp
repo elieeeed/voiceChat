@@ -2,6 +2,8 @@
 #include "widget.h"
 #include "ui_widget.h"
 #include <QDebug>
+#include <QHostInfo>
+#include <QNetworkInterface>
 
 const int CAP_SIZE = 44100;
 
@@ -26,6 +28,7 @@ Widget::~Widget()
 
     alcMakeContextCurrent(nullptr);
     alcDestroyContext(inputContext);
+    alcCaptureCloseDevice(captureDevice);
     alcCloseDevice(inputDevice);
 }
 
@@ -44,14 +47,22 @@ void Widget::initializeAudio()
     if (!alcMakeContextCurrent(inputContext))
         throw("failed to make context current");
 
-    const ALCchar* name = nullptr;
+    const ALCchar* playbackDeviceName = nullptr;
     if (alcIsExtensionPresent(inputDevice, "ALC_ENUMERATE_ALL_EXT"))
-        name = alcGetString(inputDevice, ALC_ALL_DEVICES_SPECIFIER);
+        playbackDeviceName = alcGetString(inputDevice, ALC_ALL_DEVICES_SPECIFIER);
 
-    if (!name || alcGetError(inputDevice) != AL_NO_ERROR)
-        name = alcGetString(inputDevice, ALC_DEVICE_SPECIFIER);
+    if (!playbackDeviceName || alcGetError(inputDevice) != AL_NO_ERROR)
+        playbackDeviceName = alcGetString(inputDevice, ALC_DEVICE_SPECIFIER);
 
-    qDebug() << "Opened " << name;
+    qDebug() << "Playback device: " << playbackDeviceName;
+
+    // Open capture device
+    captureDevice = alcCaptureOpenDevice(nullptr, 44100, AL_FORMAT_MONO16, CAP_SIZE);
+    if (!captureDevice)
+        throw("failed to open capture device");
+
+    const ALCchar* captureDeviceName = alcGetString(captureDevice, ALC_CAPTURE_DEVICE_SPECIFIER);
+    qDebug() << "Capture device: " << captureDeviceName;
 
     connect(ui->captureBtn, &QPushButton::clicked, this, &Widget::on_captureBtn_clicked);
     connect(ui->stopBtn, &QPushButton::clicked, this, &Widget::on_stopBtn_clicked);
@@ -68,15 +79,28 @@ void Widget::on_stopBtn_clicked()
 
 void Widget::on_connectBtn_clicked()
 {
-    ui->status_value->setText("connected...");
+    QString ipAddress = getLocalIpAddress();
+
+    QHostAddress hostAddress(ipAddress);
+    if (!hostAddress.isNull() && hostAddress.protocol() == QAbstractSocket::IPv4Protocol) {
+        qDebug() << "Connecting to IP: " << ipAddress;
+
+        ui->status_value->setText("Connected to " + ipAddress);
+    }
+    else {
+
+        ui->status_value->setText("Invalid IP address");
+    }
 }
 
 void Widget::on_captureBtn_clicked()
 {
     ui->status_value->setText("Recording...");
 
+    captureDevice = alcCaptureOpenDevice(nullptr, 44100, AL_FORMAT_MONO16, CAP_SIZE);
+
     //recording code
-    alcCaptureStart(inputDevice);
+    alcCaptureStart(captureDevice);
 
     alGenBuffers(1, &currentBuffer);
 
@@ -103,4 +127,16 @@ void Widget::processAudio()
         alGetSourcei(currentPlaybackSource, AL_SOURCE_STATE, &sState);
     } while (sState == AL_PLAYING);
 
+}
+
+QString Widget::getLocalIpAddress() {
+    QList<QHostAddress> ipAddressesList = QNetworkInterface::allAddresses();
+    for (const QHostAddress& address : ipAddressesList)
+    {
+        if (address.protocol() == QAbstractSocket::IPv4Protocol && !address.isLoopback())
+        {
+            return address.toString();
+        }
+    }
+    return "";
 }

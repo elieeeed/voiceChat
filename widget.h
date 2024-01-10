@@ -37,9 +37,10 @@ private:
     ALCdevice* inputDevice;
     ALuint currentBuffer;
     ALuint currentPlaybackSource;
+    ALCdevice* captureDevice;
     //std::list<ALuint> bufferQueue;
 
-
+    QString getLocalIpAddress();
     void initializeAudio();
 };
 
