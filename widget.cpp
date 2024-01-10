@@ -2,7 +2,6 @@
 #include "widget.h"
 #include "ui_widget.h"
 #include <QDebug>
-#include <QtConcurrent/QtConcurrent>
 
 const int CAP_SIZE = 44100;
 
@@ -67,12 +66,6 @@ void Widget::on_connectBtn_clicked()
     ui->status_value->setText("connected...");
 }
 
-// QtConcurrent::run([this]() {
-//     while (isCapturing) {
-//         processAudio();
-//     }
-// });
-
 void Widget::on_captureBtn_clicked()
 {
     ui->status_value->setText("Recording...");
@@ -97,7 +90,7 @@ void Widget::on_captureBtn_clicked()
 
 void Widget::processAudio()
 {
-    ALshort capturedData[CAP_SIZE];
+    ALshort capturedData[CAP_SIZE] = {0};
     alcCaptureSamples(inputDevice, capturedData, CAP_SIZE);
 
     alBufferData(currentBuffer, AL_FORMAT_MONO16, capturedData, CAP_SIZE * sizeof(ALshort), 44100);
