@@ -12,6 +12,7 @@ Widget::Widget(QWidget *parent)
     , ui(new Ui::Widget),
     inputDevice(nullptr),
     inputContext(nullptr),
+    captureDevice(nullptr),
     currentBuffer(0),
     currentPlaybackSource(0)
 {
