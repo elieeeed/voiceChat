@@ -58,6 +58,8 @@ void Widget::on_stopBtn_clicked()
 
     ui->status_value->setText("Recording stopped");
     alcCaptureStop(inputDevice);
+    alDeleteSources(1, &currentPlaybackSource);
+    alDeleteBuffers(1, &currentBuffer);
 }
 
 void Widget::on_connectBtn_clicked()
@@ -81,6 +83,12 @@ void Widget::on_captureBtn_clicked()
     ALuint buffer;
     alGenBuffers(1, &buffer);
 
+    ALuint playbackSource;
+    alGenSources(1, &playbackSource);
+
+    currentBuffer = buffer;
+    currentPlaybackSource = playbackSource;
+
     QTimer* audioTimer = new QTimer(this);
     connect(audioTimer, &QTimer::timeout, this, &Widget::processAudio);
     audioTimer->start(10);
@@ -89,27 +97,20 @@ void Widget::on_captureBtn_clicked()
 
 void Widget::processAudio()
 {
-    ALuint playbackSource;
-    alGenSources(1, &playbackSource);
-    alGetError();
-
     ALshort capturedData[CAP_SIZE];
     alcCaptureSamples(inputDevice, capturedData, CAP_SIZE);
 
-    ALuint buffer;
-    alGenBuffers(1, &buffer);
-    alBufferData(buffer, AL_FORMAT_MONO16, capturedData, CAP_SIZE * sizeof(ALshort), 44100);
+    alBufferData(currentBuffer, AL_FORMAT_MONO16, capturedData, CAP_SIZE * sizeof(ALshort), 44100);
 
-    alSourcei(playbackSource, AL_BUFFER, buffer);
-    alSourcePlay(playbackSource);
+    alSourceStop(currentPlaybackSource);
+
+    alSourcei(currentPlaybackSource, AL_BUFFER, currentBuffer);
+    alSourcePlay(currentPlaybackSource);
 
     ALint sState = 0;
     do {
-        alGetSourcei(playbackSource, AL_SOURCE_STATE, &sState);
+        alGetSourcei(currentPlaybackSource, AL_SOURCE_STATE, &sState);
     } while (sState == AL_PLAYING);
-
-    alDeleteSources(1, &playbackSource);
-    alDeleteBuffers(1, &buffer);
 
 }
 

@@ -9,7 +9,6 @@
 #include <AL/al.h>
 #include <AL/alc.h>
 #include <QBuffer>
-#include <stdio.h>
 #include <list>
 
 
@@ -36,6 +35,8 @@ private:
     Ui::Widget *ui;
     ALCcontext* inputContext;
     ALCdevice* inputDevice;
+    ALuint currentBuffer;
+    ALuint currentPlaybackSource;
     std::list<ALuint> bufferQueue;
 
 
