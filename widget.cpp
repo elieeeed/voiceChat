@@ -9,7 +9,9 @@ Widget::Widget(QWidget *parent)
     : QWidget(parent)
     , ui(new Ui::Widget),
     inputDevice(nullptr),
-    inputContext(nullptr)
+    inputContext(nullptr),
+    currentBuffer(0),
+    currentPlaybackSource(0)
 {
     ui->setupUi(this);
     initializeAudio();
@@ -18,6 +20,9 @@ Widget::Widget(QWidget *parent)
 Widget::~Widget()
 {
     delete ui;
+
+    alDeleteSources(1, &currentPlaybackSource);
+    alDeleteBuffers(1, &currentBuffer);
 
     alcMakeContextCurrent(nullptr);
     alcDestroyContext(inputContext);
@@ -73,18 +78,13 @@ void Widget::on_captureBtn_clicked()
     //recording code
     alcCaptureStart(inputDevice);
 
-    ALuint buffer;
-    alGenBuffers(1, &buffer);
+    alGenBuffers(1, &currentBuffer);
 
-    ALuint playbackSource;
-    alGenSources(1, &playbackSource);
-
-    currentBuffer = buffer;
-    currentPlaybackSource = playbackSource;
+    alGenSources(1, &currentPlaybackSource);
 
     QTimer* audioTimer = new QTimer(this);
     connect(audioTimer, &QTimer::timeout, this, &Widget::processAudio);
-    audioTimer->start(10);
+    audioTimer->start(5);
 
 }
 
@@ -106,4 +106,3 @@ void Widget::processAudio()
     } while (sState == AL_PLAYING);
 
 }
-

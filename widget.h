@@ -37,7 +37,7 @@ private:
     ALCdevice* inputDevice;
     ALuint currentBuffer;
     ALuint currentPlaybackSource;
-    std::list<ALuint> bufferQueue;
+    //std::list<ALuint> bufferQueue;
 
 
     void initializeAudio();
