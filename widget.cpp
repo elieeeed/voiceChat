@@ -95,8 +95,6 @@ void Widget::processAudio()
 
     alBufferData(currentBuffer, AL_FORMAT_MONO16, capturedData, CAP_SIZE * sizeof(ALshort), 44100);
 
-    alSourceStop(currentPlaybackSource);
-
     alSourcei(currentPlaybackSource, AL_BUFFER, currentBuffer);
     alSourcePlay(currentPlaybackSource);
 
