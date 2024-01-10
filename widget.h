@@ -9,6 +9,8 @@
 #include <AL/al.h>
 #include <AL/alc.h>
 #include <QBuffer>
+#include <stdio.h>
+#include <list>
 
 
 QT_BEGIN_NAMESPACE
@@ -34,10 +36,8 @@ private:
     Ui::Widget *ui;
     ALCcontext* inputContext;
     ALCdevice* inputDevice;
-    ALuint inputSource;
-    ALuint outputSource;
+    std::list<ALuint> bufferQueue;
 
-    bool isCapturing;
 
     void initializeAudio();
 };

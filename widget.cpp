@@ -4,14 +4,13 @@
 #include <QDebug>
 #include <QtConcurrent/QtConcurrent>
 
+const int CAP_SIZE = 44100;
+
 Widget::Widget(QWidget *parent)
     : QWidget(parent)
     , ui(new Ui::Widget),
     inputDevice(nullptr),
-    inputContext(nullptr),
-    inputSource(0),
-    outputSource(0),
-    isCapturing(false)
+    inputContext(nullptr)
 {
     ui->setupUi(this);
     initializeAudio();
@@ -20,37 +19,45 @@ Widget::Widget(QWidget *parent)
 Widget::~Widget()
 {
     delete ui;
-    alDeleteSources(1, &inputSource);
+
+    alcMakeContextCurrent(nullptr);
     alcDestroyContext(inputContext);
-    alcCaptureCloseDevice(inputDevice);
+    alcCloseDevice(inputDevice);
 }
+
 
 void Widget::initializeAudio()
 {
-    const ALCchar* deviceName;
 
-    deviceName = alcGetString(nullptr, ALC_DEFAULT_DEVICE_SPECIFIER);
-
-    inputDevice = alcOpenDevice(deviceName);
-
+    inputDevice = alcOpenDevice(nullptr);
     if (!inputDevice)
-    {
-        qWarning() << "Failed to open audio capture device";
-        return;
-    }
-
-    qDebug() << "device : " << inputDevice;
+        throw("failed to get sound device");
 
     inputContext = alcCreateContext(inputDevice, nullptr);
+    if(!inputContext)
+        throw("Failed to set sound context");
 
+    if (!alcMakeContextCurrent(inputContext))
+        throw("failed to make context current");
 
+    const ALCchar* name = nullptr;
+    if (alcIsExtensionPresent(inputDevice, "ALC_ENUMERATE_ALL_EXT"))
+        name = alcGetString(inputDevice, ALC_ALL_DEVICES_SPECIFIER);
 
-    alcMakeContextCurrent(inputContext);
-    alGenSources(1, &inputSource);
-    alGenSources(1, &outputSource);
+    if (!name || alcGetError(inputDevice) != AL_NO_ERROR)
+        name = alcGetString(inputDevice, ALC_DEVICE_SPECIFIER);
+
+    qDebug() << "Opened " << name;
 
     connect(ui->captureBtn, &QPushButton::clicked, this, &Widget::on_captureBtn_clicked);
     connect(ui->stopBtn, &QPushButton::clicked, this, &Widget::on_stopBtn_clicked);
+}
+
+void Widget::on_stopBtn_clicked()
+{
+
+    ui->status_value->setText("Recording stopped");
+    alcCaptureStop(inputDevice);
 }
 
 void Widget::on_connectBtn_clicked()
@@ -58,63 +65,51 @@ void Widget::on_connectBtn_clicked()
     ui->status_value->setText("connected...");
 }
 
+// QtConcurrent::run([this]() {
+//     while (isCapturing) {
+//         processAudio();
+//     }
+// });
+
 void Widget::on_captureBtn_clicked()
 {
     ui->status_value->setText("Recording...");
 
-    alcMakeContextCurrent(inputContext);
-
+    //recording code
     alcCaptureStart(inputDevice);
-    alSourcePlay(inputSource);
 
-
-    alcCaptureStart(inputDevice);
-    alSourcePlay(inputSource);
-
-    isCapturing = true;
-
-    // QtConcurrent::run([this]() {
-    //     while (isCapturing) {
-    //         processAudio();
-    //     }
-    // });
+    ALuint buffer;
+    alGenBuffers(1, &buffer);
 
     QTimer* audioTimer = new QTimer(this);
     connect(audioTimer, &QTimer::timeout, this, &Widget::processAudio);
-    audioTimer->start(20);
+    audioTimer->start(10);
 
 }
 
 void Widget::processAudio()
 {
-    ALint samplesAvailable;
-    alcGetIntegerv(inputDevice, ALC_CAPTURE_SAMPLES, 1, &samplesAvailable);
+    ALuint playbackSource;
+    alGenSources(1, &playbackSource);
+    alGetError();
 
-    if (samplesAvailable > 0) {
-        ALshort buffer[samplesAvailable];
-        alcCaptureSamples(inputDevice, buffer, samplesAvailable);
+    ALshort capturedData[CAP_SIZE];
+    alcCaptureSamples(inputDevice, capturedData, CAP_SIZE);
 
-        ALenum alError = alGetError();
-        if (alError != AL_NO_ERROR) {
-            qCritical() << "OpenAL Error: " << alGetString(alError);
-            return;
-        }
+    ALuint buffer;
+    alGenBuffers(1, &buffer);
+    alBufferData(buffer, AL_FORMAT_MONO16, capturedData, CAP_SIZE * sizeof(ALshort), 44100);
 
-        alSourceQueueBuffers(outputSource, 1, &inputSource);
+    alSourcei(playbackSource, AL_BUFFER, buffer);
+    alSourcePlay(playbackSource);
 
-        alError = alGetError();
-        if (alError != AL_NO_ERROR) {
-            qCritical() << "OpenAL Error (Queue Buffers): " << alGetString(alError);
-        }
-    }
-}
+    ALint sState = 0;
+    do {
+        alGetSourcei(playbackSource, AL_SOURCE_STATE, &sState);
+    } while (sState == AL_PLAYING);
 
-void Widget::on_stopBtn_clicked()
-{
-    isCapturing = false;
-    ui->status_value->setText("Recording stopped");
-    alcCaptureStop(inputDevice);
-    alcMakeContextCurrent(nullptr);
-    alSourceStop(inputSource);
+    alDeleteSources(1, &playbackSource);
+    alDeleteBuffers(1, &buffer);
+
 }
 
